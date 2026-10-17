@@ -1,0 +1,62 @@
+# The checks that need no GPU and no model download: the Python tests (setup, server, tools), the CPU build with its
+# C++ tests, and a compile of the CUDA engine.  Nothing here runs the engine on a GPU.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpu:
+    name: Python tests, CPU build and C++ tests (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the pinned packages (cmake and ninja among them)
+        run: python -m pip install -r requirements.txt pytest
+      - name: Configure (fetches the pinned llama.cpp, whose gguf-py the tools' tests use)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_BUILD_TESTS=ON -DSTRATA_BUILD_CONVERSATION_TESTS=ON
+      - name: Build
+        run: cmake --build build -j "$(nproc)"
+      - name: C++ tests
+        run: ctest --test-dir build -j "$(nproc)" --output-on-failure
+      - name: Python tests
+        # test_*.py only: tools/ also holds *_test.py scripts that run against a live engine
+        env:
+          STRATA_GGUF_PY: ${{ github.workspace }}/build/_deps/strata_llamacpp-src/gguf-py
+        run: python -m pytest -q -p no:cacheprovider -o python_files='test_*.py' serve tools
+      - name: gfx906 query-swizzle host guard (mock HIP)
+        run: python bench/test_gfx906_qsa_query_swizzle_guard.py
+
+  cuda:
+    name: CUDA engine compiles (sm75, sm120)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container: nvidia/cuda:13.0.0-devel-ubuntu24.04   # the Dockerfile's toolkit
+    steps:
+      - name: Install git and Python
+        run: apt-get update && apt-get install -y --no-install-recommends git python3 python3-venv ca-certificates
+      - uses: actions/checkout@v4
+      - name: Install the pinned cmake and ninja
+        run: |
+          python3 -m venv /opt/venv
+          /opt/venv/bin/pip install "$(grep '^cmake==' requirements.txt)" "$(grep '^ninja==' requirements.txt)"
+          echo /opt/venv/bin >> "$GITHUB_PATH"
+      - name: Configure
+        # the oldest and the newest arch the release builds for (Dockerfile: 75;80;86;89;120)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_ENABLE_CUDA=ON "-DCMAKE_CUDA_ARCHITECTURES=75;120"
+      - name: Build
+        run: cmake --build build -j "$(nproc)"
