@@ -32,7 +32,9 @@ jobs:
       - name: Build
         run: cmake --build build -j "$(nproc)"
       - name: C++ tests
-        run: ctest --test-dir build -j "$(nproc)" --output-on-failure
+        # expert_parity and pool_test read a real model pack (pack/full/experts.bin) on an AVX-512 CPU and fail
+        # without it on purpose (CMakeLists.txt); a runner has no pack
+        run: ctest --test-dir build -j "$(nproc)" --output-on-failure -E '^(expert_parity|pool_test)$'
       - name: Python tests
         # test_*.py only: tools/ also holds *_test.py scripts that run against a live engine
         env:
