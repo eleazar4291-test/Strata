@@ -44,7 +44,7 @@ jobs:
         run: python bench/test_gfx906_qsa_query_swizzle_guard.py
 
   cuda:
-    name: CUDA engine compiles (sm75, sm120)
+    name: CUDA engine compiles (sm89, sm120)
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     container: nvidia/cuda:13.0.0-devel-ubuntu24.04   # the Dockerfile's toolkit
@@ -58,7 +58,7 @@ jobs:
           /opt/venv/bin/pip install "$(grep '^cmake==' requirements.txt)" "$(grep '^ninja==' requirements.txt)"
           echo /opt/venv/bin >> "$GITHUB_PATH"
       - name: Configure
-        # the oldest and the newest arch the release builds for (Dockerfile: 75;80;86;89;120)
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_ENABLE_CUDA=ON "-DCMAKE_CUDA_ARCHITECTURES=75;120"
+        # the cards this PC runs: RTX 4060 Ti (sm89, the installed engine's arch) and RTX 5080 (sm120)
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DSTRATA_ENABLE_CUDA=ON "-DCMAKE_CUDA_ARCHITECTURES=89;120"
       - name: Build
         run: cmake --build build -j "$(nproc)"
