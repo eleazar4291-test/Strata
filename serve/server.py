@@ -6238,6 +6238,26 @@ class Server(ThreadingHTTPServer):
         super().server_close()
 
 
+class Server6(Server):
+    """--host :: or an IPv6 address (Server is IPv4 only: it stopped with "Address family for hostname not supported").
+    "::" also takes IPv4 clients, as 0.0.0.0 does (Windows makes an IPv6 socket IPv6-only unless told otherwise)."""
+    address_family = socket.AF_INET6
+
+    def server_bind(self):
+        if self.server_address[0] == "::":
+            with contextlib.suppress(OSError, AttributeError):
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        super().server_bind()
+
+
+def url_host(host: str) -> str:
+    """The host part of a URL to this server: a listen-on-all address is reached at this PC's own, and an IPv6 address
+    needs brackets ("::1" -> "[::1]")."""
+    if host in ("0.0.0.0", "", "::"):
+        return "127.0.0.1"
+    return f"[{host}]" if ":" in host else host
+
+
 def warn_tight_ram(arena_mib) -> None:
     """The model's experts live in RAM (INFO arena_mib, engine 0.1.10+).  With less than ~6 GB left beside them for the
     system, the engine and this server, Linux ends the engine mid-answer when memory runs out (issue #27) and Windows
@@ -6483,7 +6503,7 @@ def origin_allowed(origin: str, host, names, origins=()) -> bool:
 def serve(svc: Service, host="127.0.0.1", port=8095) -> ThreadingHTTPServer:
     svc.host_names = host_names_for(host, svc.allowed_hosts, svc.trusted_origins)
     svc.start_telemetry()
-    httpd = Server((host, port), make_handler(svc))
+    httpd = (Server6 if ":" in host else Server)((host, port), make_handler(svc))
     httpd.svc = svc
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd
@@ -7101,7 +7121,7 @@ def main() -> int:
     httpd = serve(svc, host=a.host, port=a.port)
     svc.start_idle_unload()
     svc.start_vision_idle()
-    here = "127.0.0.1" if a.host in ("0.0.0.0", "", "::") else a.host
+    here = url_host(a.host)
     print(f"ready: http://{here}:{a.port}/v1  (OpenAI: /v1/chat/completions, Anthropic: /v1/messages, "
           f"context {engine.max_context} tokens{', images on' if vision else ''}"
           f"{', API key required' if svc.api_key else ''})", flush=True)
@@ -7123,7 +7143,7 @@ def main() -> int:
                   "       (and set this network to Private in Windows' network settings)", flush=True)
     if a.open and cfg.get("open_browser") is not False:   # #609: the config's "open_browser": false wins (an older
         import webbrowser                                  # run-<model>.bat still passes --open)
-        webbrowser.open(f"http://{'127.0.0.1' if a.host in ('0.0.0.0', '') else a.host}:{a.port}/")
+        webbrowser.open(f"http://{here}:{a.port}/")
     # #96: docker stop sends SIGTERM, which Python ignores by default, so the container's PID 1 would be killed after
     # the grace period with the engine still running. SIGTERM takes Ctrl+C's path below (QUIT to the engine).
     # SIGINT keeps Python's own handler, so Ctrl+C and a second Ctrl+C work as before.
