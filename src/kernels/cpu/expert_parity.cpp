@@ -102,7 +102,7 @@ int main(int argc, char** argv) {
         std::printf("      the VNNI path cannot run here; only the scalar oracle can be exercised.\n");
         std::printf("      P2.S3's kernel check is SKIPPED, not passed.\n");
         std::printf("\nexpert_parity: 0 failures, 1 SKIPPED\n");
-        return 0;
+        return selftest ? 77 : 0;               // ctest reports 77 as skipped (SKIP_RETURN_CODE), not passed
     }
 
     // ---- a real blob out of the pack: layer stride is 512 experts

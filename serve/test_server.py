@@ -5978,3 +5978,38 @@ class PrepareCancelled(unittest.TestCase):
             ids, _, _ = svc.prepare(self.msgs(), None, {}, cancel=threading.Event())
             self.assertEqual(ids.count(ByteTokenizer().encode("<|image_pad|>", parse_special=True)[0]), 6)
             svc.embeddings.path.unlink(missing_ok=True)
+
+
+class Ipv6Listen(unittest.TestCase):
+    """--host :: and an IPv6 address listen (the IPv4-only server stopped on them), and the URLs it prints and opens
+    put the address in brackets."""
+
+    def test_url_host(self):
+        from serve.server import url_host
+        for host, want in (("127.0.0.1", "127.0.0.1"), ("0.0.0.0", "127.0.0.1"), ("", "127.0.0.1"),
+                           ("::", "127.0.0.1"), ("::1", "[::1]"), ("fe80::1", "[fe80::1]"),
+                           ("192.168.1.5", "192.168.1.5"), ("localhost", "localhost")):
+            with self.subTest(host=host):
+                self.assertEqual(url_host(host), want)
+
+    def health(self, host, base_ip):
+        if not socket.has_ipv6:
+            self.skipTest("no IPv6 on this PC")
+        tok = ByteTokenizer()
+        svc = Service(MockEngine(tok, "ok", max_context=0), tok, ChatTemplate(ROOT / "serve/chat_template.jinja"))
+        try:
+            httpd = serve(svc, host=host, port=0)
+        except OSError as e:
+            self.skipTest(f"cannot listen on {host}: {e}")
+        try:
+            with urllib.request.urlopen(f"http://{base_ip}:{httpd.server_address[1]}/health", timeout=10) as r:
+                return r.status
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    def test_ipv6_loopback(self):
+        self.assertEqual(self.health("::1", "[::1]"), 200)
+
+    def test_all_addresses_take_ipv4_too(self):
+        self.assertEqual(self.health("::", "127.0.0.1"), 200)

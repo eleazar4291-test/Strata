@@ -295,6 +295,12 @@ class WhatARefusalDoesToTheCaller(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         (Path(self.tmp.name) / "engine").mkdir(parents=True, exist_ok=True)
+        # the engine folder is the temp one, and the release's HEAD check answers here: the test used to ask GitHub
+        # (it failed wherever the release has no asset for this OS) and made engine/ in the checkout
+        for patcher in (mock.patch.object(setup, "engine_dir", lambda toolkit=13: Path(self.tmp.name) / "engine"),
+                        mock.patch.object(setup.urllib.request, "urlopen", lambda *a, **k: mock.Mock())):
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def fake_download(self, url, dst, what=None):
         with zipfile.ZipFile(dst, "w") as z:
