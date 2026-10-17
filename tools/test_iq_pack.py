@@ -3,6 +3,7 @@ import contextlib
 import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -14,7 +15,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))   # runnable from the repo root too
 
 from _paths import add_gguf_py
-add_gguf_py()
+try:
+    add_gguf_py()
+except SystemExit as e:                  # a checkout setup.py has not run in: skipped (it stopped a whole pytest run)
+    if os.environ.get("STRATA_GGUF_PY"):  # a path asked for that is not there still fails
+        raise ImportError(str(e)) from None
+    raise unittest.SkipTest(str(e)) from None
 from gguf import GGUFWriter, GGMLQuantizationType as Q, quants
 import iq_pack
 

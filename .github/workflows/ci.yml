@@ -36,10 +36,10 @@ jobs:
         # without it on purpose (CMakeLists.txt); a runner has no pack
         run: ctest --test-dir build -j "$(nproc)" --output-on-failure -E '^(expert_parity|pool_test)$'
       - name: Python tests
-        # test_*.py only: tools/ also holds *_test.py scripts that run against a live engine
+        # pytest.ini picks the tests (serve/ and tools/, test_*.py); with STRATA_GGUF_PY set, test_iq_pack runs or fails
         env:
           STRATA_GGUF_PY: ${{ github.workspace }}/build/_deps/strata_llamacpp-src/gguf-py
-        run: python -m pytest -q -p no:cacheprovider -o python_files='test_*.py' serve tools
+        run: python -m pytest -q -p no:cacheprovider
       - name: gfx906 query-swizzle host guard (mock HIP)
         run: python bench/test_gfx906_qsa_query_swizzle_guard.py
 
